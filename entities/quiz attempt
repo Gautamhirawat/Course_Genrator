@@ -1,0 +1,50 @@
+{
+  "name": "QuizAttempt",
+  "type": "object",
+  "properties": {
+    "quiz_id": {
+      "type": "string",
+      "description": "Reference to Quiz"
+    },
+    "user_email": {
+      "type": "string",
+      "description": "User who attempted the quiz"
+    },
+    "score": {
+      "type": "number",
+      "description": "Score achieved"
+    },
+    "total_questions": {
+      "type": "number"
+    },
+    "time_taken_seconds": {
+      "type": "number"
+    },
+    "answers": {
+      "type": "array",
+      "description": "User's answers",
+      "items": {
+        "type": "object",
+        "properties": {
+          "question_index": {
+            "type": "number"
+          },
+          "selected_answer": {
+            "type": "string"
+          },
+          "is_correct": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "completed": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "required": [
+    "quiz_id",
+    "user_email"
+  ]
+}
