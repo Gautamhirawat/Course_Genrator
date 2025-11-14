@@ -1,0 +1,77 @@
+{
+  "name": "Quiz",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "Quiz title"
+    },
+    "topic": {
+      "type": "string",
+      "description": "Subject or topic"
+    },
+    "difficulty": {
+      "type": "string",
+      "enum": [
+        "easy",
+        "medium",
+        "hard"
+      ],
+      "default": "medium"
+    },
+    "questions": {
+      "type": "array",
+      "description": "Array of quiz questions",
+      "items": {
+        "type": "object",
+        "properties": {
+          "question": {
+            "type": "string"
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "correct_answer": {
+            "type": "string"
+          },
+          "explanation": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "duration_minutes": {
+      "type": "number",
+      "description": "Quiz duration in minutes",
+      "default": 15
+    },
+    "total_questions": {
+      "type": "number"
+    },
+    "assigned_users": {
+      "type": "array",
+      "description": "Emails of users assigned to this quiz",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "is_public": {
+      "type": "boolean",
+      "description": "If true, all users can take this quiz",
+      "default": true
+    },
+    "created_by_admin": {
+      "type": "string",
+      "description": "Email of admin who created this quiz"
+    }
+  },
+  "required": [
+    "title",
+    "topic",
+    "questions"
+  ]
+}
