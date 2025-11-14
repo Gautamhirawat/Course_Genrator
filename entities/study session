@@ -1,0 +1,42 @@
+{
+  "name": "StudySession",
+  "type": "object",
+  "properties": {
+    "user_email": {
+      "type": "string",
+      "description": "User's email"
+    },
+    "topic": {
+      "type": "string",
+      "description": "Topic studied"
+    },
+    "subtopics": {
+      "type": "array",
+      "description": "Subtopics covered",
+      "items": {
+        "type": "string"
+      }
+    },
+    "duration_minutes": {
+      "type": "number",
+      "description": "Study duration in minutes"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Study notes or summary"
+    },
+    "understanding_level": {
+      "type": "string",
+      "enum": [
+        "beginner",
+        "intermediate",
+        "advanced"
+      ],
+      "description": "Current understanding level"
+    }
+  },
+  "required": [
+    "user_email",
+    "topic"
+  ]
+}
