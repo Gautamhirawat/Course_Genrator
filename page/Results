@@ -1,0 +1,227 @@
+import React, { useState, useEffect } from "react";
+import { base44 } from "@/api/base44Client";
+import { useNavigate } from "react-router-dom";
+import { createPageUrl } from "@/utils";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { Trophy, Clock, CheckCircle, XCircle, Home, RotateCcw, TrendingUp } from "lucide-react";
+import confetti from "canvas-confetti";
+
+export default function Results() {
+  const navigate = useNavigate();
+  const [attempt, setAttempt] = useState(null);
+  const [quiz, setQuiz] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadResults();
+  }, []);
+
+  useEffect(() => {
+    if (attempt && attempt.score / attempt.total_questions >= 0.7) {
+      confetti({
+        particleCount: 100,
+        spread: 70,
+        origin: { y: 0.6 }
+      });
+    }
+  }, [attempt]);
+
+  const loadResults = async () => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const attemptId = urlParams.get('id');
+      
+      const attemptData = await base44.entities.QuizAttempt.filter({ id: attemptId });
+      if (attemptData.length > 0) {
+        setAttempt(attemptData[0]);
+        
+        const quizData = await base44.entities.Quiz.filter({ id: attemptData[0].quiz_id });
+        if (quizData.length > 0) {
+          setQuiz(quizData[0]);
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    }
+    setLoading(false);
+  };
+
+  if (loading || !attempt || !quiz) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
+      </div>
+    );
+  }
+
+  const percentage = (attempt.score / attempt.total_questions) * 100;
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}m ${secs}s`;
+  };
+
+  const getGrade = (percentage) => {
+    if (percentage >= 90) return { grade: 'A+', color: 'text-green-600', bg: 'bg-green-100' };
+    if (percentage >= 80) return { grade: 'A', color: 'text-green-600', bg: 'bg-green-100' };
+    if (percentage >= 70) return { grade: 'B', color: 'text-blue-600', bg: 'bg-blue-100' };
+    if (percentage >= 60) return { grade: 'C', color: 'text-yellow-600', bg: 'bg-yellow-100' };
+    if (percentage >= 50) return { grade: 'D', color: 'text-orange-600', bg: 'bg-orange-100' };
+    return { grade: 'F', color: 'text-red-600', bg: 'bg-red-100' };
+  };
+
+  const gradeInfo = getGrade(percentage);
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 py-8 px-4">
+      <div className="max-w-5xl mx-auto">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full mb-4 shadow-xl">
+            <Trophy className="w-10 h-10 text-white" />
+          </div>
+          <h1 className="text-4xl font-bold text-slate-800 mb-2">Quiz Complete!</h1>
+          <p className="text-xl text-slate-600">{quiz.title}</p>
+        </div>
+
+        {/* Score Card */}
+        <Card className="shadow-2xl mb-6 overflow-hidden">
+          <div className={`h-2 bg-gradient-to-r ${
+            percentage >= 70 ? 'from-green-400 to-emerald-500' :
+            percentage >= 50 ? 'from-yellow-400 to-orange-500' :
+            'from-red-400 to-pink-500'
+          }`} />
+          <CardContent className="p-8">
+            <div className="grid md:grid-cols-3 gap-8">
+              <div className="text-center">
+                <div className={`inline-flex items-center justify-center w-32 h-32 rounded-full ${gradeInfo.bg} mb-4`}>
+                  <span className={`text-5xl font-bold ${gradeInfo.color}`}>{gradeInfo.grade}</span>
+                </div>
+                <p className="text-slate-600 font-medium">Grade</p>
+              </div>
+              
+              <div className="text-center">
+                <div className="mb-4">
+                  <div className="text-5xl font-bold text-blue-600 mb-2">
+                    {attempt.score}/{attempt.total_questions}
+                  </div>
+                  <Progress value={percentage} className="h-3" />
+                </div>
+                <p className="text-slate-600 font-medium">Score: {percentage.toFixed(1)}%</p>
+              </div>
+
+              <div className="text-center">
+                <div className="inline-flex items-center justify-center w-32 h-32 rounded-full bg-purple-100 mb-4">
+                  <Clock className="w-12 h-12 text-purple-600" />
+                </div>
+                <p className="text-slate-600 font-medium">{formatTime(attempt.time_taken_seconds)}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Stats */}
+        <div className="grid md:grid-cols-2 gap-6 mb-6">
+          <Card className="shadow-lg">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-green-600">
+                <CheckCircle className="w-5 h-5" />
+                Correct Answers
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-4xl font-bold text-green-600">{attempt.score}</div>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-lg">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-red-600">
+                <XCircle className="w-5 h-5" />
+                Incorrect Answers
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-4xl font-bold text-red-600">{attempt.total_questions - attempt.score}</div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Detailed Results */}
+        <Card className="shadow-lg mb-6">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <TrendingUp className="w-5 h-5" />
+              Question-by-Question Review
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {quiz.questions.map((question, index) => {
+              const userAnswer = attempt.answers.find(a => a.question_index === index);
+              const isCorrect = userAnswer?.is_correct;
+
+              return (
+                <div key={index} className={`p-4 rounded-lg border-2 ${
+                  isCorrect ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'
+                }`}>
+                  <div className="flex items-start gap-3 mb-2">
+                    {isCorrect ? (
+                      <CheckCircle className="w-5 h-5 text-green-600 mt-1 flex-shrink-0" />
+                    ) : (
+                      <XCircle className="w-5 h-5 text-red-600 mt-1 flex-shrink-0" />
+                    )}
+                    <div className="flex-1">
+                      <p className="font-semibold text-slate-800 mb-2">
+                        {index + 1}. {question.question}
+                      </p>
+                      <div className="space-y-1 text-sm">
+                        <p className="text-slate-600">
+                          <span className="font-medium">Your answer:</span>{' '}
+                          <span className={isCorrect ? 'text-green-700' : 'text-red-700'}>
+                            {userAnswer?.selected_answer || 'Not answered'}
+                          </span>
+                        </p>
+                        {!isCorrect && (
+                          <p className="text-slate-600">
+                            <span className="font-medium">Correct answer:</span>{' '}
+                            <span className="text-green-700">{question.correct_answer}</span>
+                          </p>
+                        )}
+                        <p className="text-slate-700 mt-2 pt-2 border-t border-slate-200">
+                          <span className="font-medium">Explanation:</span> {question.explanation}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+
+        {/* Action Buttons */}
+        <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <Button
+            onClick={() => navigate(createPageUrl("Home"))}
+            variant="outline"
+            size="lg"
+            className="flex-1 sm:flex-none"
+          >
+            <Home className="w-5 h-5 mr-2" />
+            Back to Home
+          </Button>
+          <Button
+            onClick={() => navigate(createPageUrl("Home"))}
+            size="lg"
+            className="flex-1 sm:flex-none bg-gradient-to-r from-blue-500 to-indigo-600"
+          >
+            <RotateCcw className="w-5 h-5 mr-2" />
+            Take Another Quiz
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
