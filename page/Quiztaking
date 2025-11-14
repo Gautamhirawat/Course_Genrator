@@ -1,0 +1,231 @@
+import React, { useState, useEffect } from "react";
+import { base44 } from "@/api/base44Client";
+import { useNavigate } from "react-router-dom";
+import { createPageUrl } from "@/utils";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+import { Clock, CheckCircle, ArrowRight, ArrowLeft } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+
+export default function QuizTaking() {
+  const navigate = useNavigate();
+  const [quiz, setQuiz] = useState(null);
+  const [currentQuestion, setCurrentQuestion] = useState(0);
+  const [answers, setAnswers] = useState({});
+  const [timeLeft, setTimeLeft] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [startTime] = useState(Date.now());
+
+  useEffect(() => {
+    loadQuiz();
+  }, []);
+
+  useEffect(() => {
+    if (timeLeft <= 0) return;
+
+    const timer = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev <= 1) {
+          submitQuiz();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [timeLeft]);
+
+  const loadQuiz = async () => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const quizId = urlParams.get('id');
+      
+      const quizData = await base44.entities.Quiz.filter({ id: quizId });
+      if (quizData.length > 0) {
+        setQuiz(quizData[0]);
+        setTimeLeft(quizData[0].duration_minutes * 60);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+    setLoading(false);
+  };
+
+  const handleAnswer = (answer) => {
+    setAnswers(prev => ({
+      ...prev,
+      [currentQuestion]: answer
+    }));
+  };
+
+  const nextQuestion = () => {
+    if (currentQuestion < quiz.questions.length - 1) {
+      setCurrentQuestion(prev => prev + 1);
+    }
+  };
+
+  const previousQuestion = () => {
+    if (currentQuestion > 0) {
+      setCurrentQuestion(prev => prev - 1);
+    }
+  };
+
+  const submitQuiz = async () => {
+    const timeTaken = Math.floor((Date.now() - startTime) / 1000);
+    const user = await base44.auth.me();
+    
+    const processedAnswers = quiz.questions.map((q, index) => ({
+      question_index: index,
+      selected_answer: answers[index] || "",
+      is_correct: answers[index] === q.correct_answer
+    }));
+
+    const score = processedAnswers.filter(a => a.is_correct).length;
+
+    const attempt = await base44.entities.QuizAttempt.create({
+      quiz_id: quiz.id,
+      user_email: user.email,
+      score: score,
+      total_questions: quiz.questions.length,
+      time_taken_seconds: timeTaken,
+      answers: processedAnswers,
+      completed: true
+    });
+
+    navigate(createPageUrl("Results") + `?id=${attempt.id}`);
+  };
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  if (loading || !quiz) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
+      </div>
+    );
+  }
+
+  const question = quiz.questions[currentQuestion];
+  const progress = ((currentQuestion + 1) / quiz.questions.length) * 100;
+  const answeredCount = Object.keys(answers).length;
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 py-8 px-4">
+      <div className="max-w-4xl mx-auto">
+        {/* Header */}
+        <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
+          <div className="flex justify-between items-center mb-4">
+            <div>
+              <h1 className="text-2xl font-bold text-slate-800">{quiz.title}</h1>
+              <p className="text-slate-600">{quiz.topic}</p>
+            </div>
+            <div className={`flex items-center gap-2 px-4 py-2 rounded-lg ${
+              timeLeft < 60 ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'
+            }`}>
+              <Clock className="w-5 h-5" />
+              <span className="font-bold text-lg">{formatTime(timeLeft)}</span>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm text-slate-600">
+              <span>Question {currentQuestion + 1} of {quiz.questions.length}</span>
+              <span>{answeredCount} answered</span>
+            </div>
+            <Progress value={progress} className="h-2" />
+          </div>
+        </div>
+
+        {/* Question Card */}
+        <Card className="shadow-xl">
+          <CardHeader>
+            <CardTitle className="text-xl leading-relaxed">{question.question}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <RadioGroup value={answers[currentQuestion] || ""} onValueChange={handleAnswer}>
+              {question.options.map((option, index) => (
+                <div
+                  key={index}
+                  className={`flex items-center space-x-3 p-4 rounded-lg border-2 transition-all cursor-pointer hover:shadow-md ${
+                    answers[currentQuestion] === option
+                      ? 'border-blue-500 bg-blue-50'
+                      : 'border-slate-200 hover:border-blue-300'
+                  }`}
+                  onClick={() => handleAnswer(option)}
+                >
+                  <RadioGroupItem value={option} id={`option-${index}`} />
+                  <Label htmlFor={`option-${index}`} className="flex-1 cursor-pointer text-base">
+                    {option}
+                  </Label>
+                </div>
+              ))}
+            </RadioGroup>
+
+            {/* Navigation */}
+            <div className="flex justify-between pt-6">
+              <Button
+                variant="outline"
+                onClick={previousQuestion}
+                disabled={currentQuestion === 0}
+              >
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Previous
+              </Button>
+
+              {currentQuestion === quiz.questions.length - 1 ? (
+                <Button
+                  onClick={submitQuiz}
+                  className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
+                >
+                  <CheckCircle className="w-4 h-4 mr-2" />
+                  Submit Quiz
+                </Button>
+              ) : (
+                <Button
+                  onClick={nextQuestion}
+                  className="bg-gradient-to-r from-blue-500 to-indigo-600"
+                >
+                  Next
+                  <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Question Navigator */}
+        <Card className="mt-6 shadow-lg">
+          <CardHeader>
+            <CardTitle className="text-sm">Quick Navigation</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-5 sm:grid-cols-10 gap-2">
+              {quiz.questions.map((_, index) => (
+                <button
+                  key={index}
+                  onClick={() => setCurrentQuestion(index)}
+                  className={`aspect-square rounded-lg font-semibold transition-all ${
+                    index === currentQuestion
+                      ? 'bg-blue-600 text-white shadow-lg scale-110'
+                      : answers[index]
+                      ? 'bg-green-100 text-green-700 border-2 border-green-300'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  {index + 1}
+                </button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
