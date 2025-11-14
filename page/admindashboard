@@ -1,0 +1,368 @@
+import React, { useState, useEffect } from "react";
+import { base44 } from "@/api/base44Client";
+import { useNavigate } from "react-router-dom";
+import { createPageUrl } from "@/utils";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Users, BookOpen, TrendingUp, Clock, Search, Eye, Shield, BarChart3 } from "lucide-react";
+import { format } from "date-fns";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+
+export default function AdminDashboard() {
+  const navigate = useNavigate();
+  const [users, setUsers] = useState([]);
+  const [attempts, setAttempts] = useState([]);
+  const [quizzes, setQuizzes] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [searchTerm, setSearchTerm] = useState("");
+
+  useEffect(() => {
+    checkAdminAndLoadData();
+  }, []);
+
+  const checkAdminAndLoadData = async () => {
+    try {
+      const user = await base44.auth.me();
+      setCurrentUser(user);
+
+      if (user.role !== 'admin') {
+        navigate(createPageUrl("Home"));
+        return;
+      }
+
+      const allUsers = await base44.entities.User.list();
+      setUsers(allUsers);
+
+      const allAttempts = await base44.entities.QuizAttempt.filter({ completed: true }, '-created_date');
+      setAttempts(allAttempts);
+
+      const quizIds = [...new Set(allAttempts.map(a => a.quiz_id))];
+      const quizData = {};
+      for (const id of quizIds) {
+        const quiz = await base44.entities.Quiz.filter({ id });
+        if (quiz.length > 0) {
+          quizData[id] = quiz[0];
+        }
+      }
+      setQuizzes(quizData);
+    } catch (err) {
+      console.error(err);
+      navigate(createPageUrl("Home"));
+    }
+    setLoading(false);
+  };
+
+  const getUserAttempts = (userEmail) => {
+    return attempts.filter(a => a.user_email === userEmail);
+  };
+
+  const getUserStats = (userEmail) => {
+    const userAttempts = getUserAttempts(userEmail);
+    if (userAttempts.length === 0) return null;
+
+    const avgScore = userAttempts.reduce((sum, a) => sum + (a.score / a.total_questions * 100), 0) / userAttempts.length;
+    const bestScore = Math.max(...userAttempts.map(a => (a.score / a.total_questions * 100)));
+    const totalTime = userAttempts.reduce((sum, a) => sum + a.time_taken_seconds, 0);
+
+    return {
+      totalQuizzes: userAttempts.length,
+      avgScore: avgScore.toFixed(1),
+      bestScore: bestScore.toFixed(1),
+      totalTime
+    };
+  };
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}m ${secs}s`;
+  };
+
+  const overallStats = {
+    totalUsers: users.length,
+    totalAttempts: attempts.length,
+    totalQuizzes: Object.keys(quizzes).length,
+    avgScore: attempts.length > 0 
+      ? (attempts.reduce((sum, a) => sum + (a.score / a.total_questions * 100), 0) / attempts.length).toFixed(1)
+      : 0
+  };
+
+  const filteredUsers = users.filter(user => 
+    user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    user.full_name?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-purple-50 to-indigo-50 py-8 px-4">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="mb-8">
+          <div className="flex items-center gap-3 mb-2">
+            <Shield className="w-8 h-8 text-purple-600" />
+            <h1 className="text-4xl font-bold text-slate-800">Admin Dashboard</h1>
+          </div>
+          <p className="text-slate-600">Monitor all users and their quiz performance</p>
+        </div>
+
+        {/* Overall Stats */}
+        <div className="grid md:grid-cols-4 gap-6 mb-8">
+          <Card className="shadow-lg border-l-4 border-blue-500">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-slate-600 flex items-center gap-2">
+                <Users className="w-4 h-4" />
+                Total Users
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-blue-600">{overallStats.totalUsers}</div>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-lg border-l-4 border-purple-500">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-slate-600 flex items-center gap-2">
+                <BookOpen className="w-4 h-4" />
+                Quiz Attempts
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-purple-600">{overallStats.totalAttempts}</div>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-lg border-l-4 border-green-500">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-slate-600 flex items-center gap-2">
+                <BarChart3 className="w-4 h-4" />
+                Average Score
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-green-600">{overallStats.avgScore}%</div>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-lg border-l-4 border-orange-500">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-slate-600 flex items-center gap-2">
+                <TrendingUp className="w-4 h-4" />
+                Total Quizzes
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-orange-600">{overallStats.totalQuizzes}</div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Users Table */}
+        <Card className="shadow-xl">
+          <CardHeader>
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <CardTitle className="flex items-center gap-2">
+                <Users className="w-5 h-5" />
+                All Users Performance
+              </CardTitle>
+              <div className="relative w-full md:w-64">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <Input
+                  placeholder="Search users..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>User</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead className="text-center">Quizzes Taken</TableHead>
+                    <TableHead className="text-center">Avg Score</TableHead>
+                    <TableHead className="text-center">Best Score</TableHead>
+                    <TableHead className="text-center">Total Time</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredUsers.map((user) => {
+                    const stats = getUserStats(user.email);
+                    const userAttempts = getUserAttempts(user.email);
+
+                    return (
+                      <TableRow key={user.id} className="hover:bg-slate-50">
+                        <TableCell>
+                          <div>
+                            <div className="font-medium text-slate-800">{user.full_name || 'Unknown'}</div>
+                            <div className="text-sm text-slate-500">{user.email}</div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={user.role === 'admin' ? 'default' : 'secondary'}>
+                            {user.role}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <span className="font-semibold">{stats?.totalQuizzes || 0}</span>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {stats ? (
+                            <span className="font-semibold text-purple-600">{stats.avgScore}%</span>
+                          ) : (
+                            <span className="text-slate-400">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {stats ? (
+                            <span className="font-semibold text-green-600">{stats.bestScore}%</span>
+                          ) : (
+                            <span className="text-slate-400">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {stats ? (
+                            <span className="font-semibold">{formatTime(stats.totalTime)}</span>
+                          ) : (
+                            <span className="text-slate-400">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {userAttempts.length > 0 && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                const modal = document.getElementById(`user-${user.id}-modal`);
+                                modal.style.display = 'block';
+                              }}
+                            >
+                              <Eye className="w-4 h-4 mr-2" />
+                              Details
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* User Details Modals */}
+        {filteredUsers.map((user) => {
+          const userAttempts = getUserAttempts(user.email);
+          if (userAttempts.length === 0) return null;
+
+          return (
+            <div
+              key={user.id}
+              id={`user-${user.id}-modal`}
+              className="fixed inset-0 bg-black bg-opacity-50 z-50 hidden items-center justify-center"
+              style={{ display: 'none' }}
+              onClick={(e) => {
+                if (e.target.id === `user-${user.id}-modal`) {
+                  e.target.style.display = 'none';
+                }
+              }}
+            >
+              <Card className="max-w-4xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+                <CardHeader>
+                  <CardTitle>
+                    Quiz History - {user.full_name}
+                    <div className="text-sm font-normal text-slate-500">{user.email}</div>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {userAttempts.map((attempt) => {
+                      const quiz = quizzes[attempt.quiz_id];
+                      if (!quiz) return null;
+
+                      const percentage = (attempt.score / attempt.total_questions) * 100;
+
+                      return (
+                        <div key={attempt.id} className="p-4 border-2 border-slate-200 rounded-lg bg-slate-50">
+                          <div className="flex justify-between items-start mb-2">
+                            <div>
+                              <h4 className="font-bold text-slate-800">{quiz.title}</h4>
+                              <div className="flex gap-2 mt-1">
+                                <Badge variant="secondary">{quiz.topic}</Badge>
+                                <Badge variant="secondary">{quiz.difficulty}</Badge>
+                              </div>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                document.getElementById(`user-${user.id}-modal`).style.display = 'none';
+                                navigate(createPageUrl("Results") + `?id=${attempt.id}`);
+                              }}
+                            >
+                              <Eye className="w-4 h-4 mr-2" />
+                              View
+                            </Button>
+                          </div>
+                          <div className="grid grid-cols-4 gap-4 mt-3">
+                            <div>
+                              <div className="text-sm text-slate-500">Score</div>
+                              <div className="font-bold text-lg">{attempt.score}/{attempt.total_questions}</div>
+                            </div>
+                            <div>
+                              <div className="text-sm text-slate-500">Percentage</div>
+                              <div className="font-bold text-lg text-purple-600">{percentage.toFixed(1)}%</div>
+                            </div>
+                            <div>
+                              <div className="text-sm text-slate-500">Time</div>
+                              <div className="font-bold text-lg">{formatTime(attempt.time_taken_seconds)}</div>
+                            </div>
+                            <div>
+                              <div className="text-sm text-slate-500">Date</div>
+                              <div className="font-bold text-sm">{format(new Date(attempt.created_date), "MMM d, yyyy")}</div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <Button
+                    className="w-full mt-4"
+                    variant="outline"
+                    onClick={() => {
+                      document.getElementById(`user-${user.id}-modal`).style.display = 'none';
+                    }}
+                  >
+                    Close
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
